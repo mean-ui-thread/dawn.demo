@@ -20,9 +20,9 @@
 # SOFTWARE.
 
 hunter_config(dawn
-    VERSION v1.0.0-p0
-    URL https://github.com/mchiasson/dawn.cmake/releases/download/v1.0.0-p0/source.tar.gz
-    SHA1 aec4dfcf2aae8fa4d8974c70b596ccb03e03ec72
+    VERSION v1.0.0-p1
+    URL https://github.com/mchiasson/dawn.cmake/releases/download/v1.0.0-p1/source.tar.gz
+    SHA1 0955a3cf2c0d7b0a9d55a517a241847de095e5a3
     CMAKE_ARGS
         DAWN_BUILD_SAMPLES=OFF
 )

@@ -19,7 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 
 include(cmake/HunterGate.cmake)
 HunterGate(
@@ -34,14 +34,10 @@ project(dawn.demo)
 hunter_add_package(glm)
 find_package(glm CONFIG REQUIRED)
 
-## https://docs.hunter.sh/en/latest/packages/pkg/glfw3.html
-hunter_add_package(glfw)
-find_package(glfw3 CONFIG REQUIRED)
-
 hunter_add_package(dawn)
 find_package(dawn CONFIG REQUIRED)
 
-add_library(SampleUtils STATIC
+add_library(SampleUtils OBJECT
     SampleUtils.cpp
     SampleUtils.h
 )
@@ -54,7 +50,6 @@ target_link_libraries(SampleUtils PUBLIC
 macro(dawn_sample target_name)
     add_executable(${target_name} ${target_name}.cpp)
     target_link_libraries(${target_name} PRIVATE SampleUtils glm)
-    list(APPEND dawn_samples ${target_name})
 endmacro()
 
 dawn_sample(CppHelloTriangle)
