@@ -39,7 +39,7 @@ find_package(glm CONFIG REQUIRED)
 hunter_add_package(dawn)
 find_package(dawn CONFIG REQUIRED)
 
-add_library(SampleUtils OBJECT
+add_library(SampleUtils STATIC
     utils/SampleUtils.cpp
     utils/SampleUtils.h
 )

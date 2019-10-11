@@ -3,21 +3,23 @@
 #include <utils/ComboRenderPipelineDescriptor.h>
 #include <utils/DawnHelpers.h>
 #include <utils/SystemUtils.h>
+
+#include <cstddef> // for offsetof
 #include <vector>
+
+constexpr size_t kMaxVertexCount = 65536;
 
 static dawn::BindGroup bindGroup;
 static dawn::Buffer uniformBuffer;
 static dawn::RenderPipeline pipeline;
 static dawn::Sampler fontSampler;
 static dawn::Texture fontTexture;
-
-constexpr size_t kMaxVertexCount = 65536;
+static std::vector<dawn::Buffer> indexBuffers;
+static std::vector<dawn::Buffer> vertexBuffers;
 
 struct alignas(kMinDynamicBufferOffsetAlignment) ShaderData {
     float ProjMtx[4][4];
 };
-
-static std::vector<ShaderData> shaderData;
 
 // Functions
 bool ImGui_ImplDawn_Init(dawn::Device& device, dawn::Queue& queue)
@@ -25,14 +27,13 @@ bool ImGui_ImplDawn_Init(dawn::Device& device, dawn::Queue& queue)
     // Setup back-end capabilities flags
     ImGuiIO& io = ImGui::GetIO();
     io.BackendRendererName = "imgui_impl_dawn";
-    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 
-    // Init Uniform Buffer
+    // Init Buffers
     {
-        dawn::BufferDescriptor bufferDesc;
-        bufferDesc.size = sizeof(ShaderData);
-        bufferDesc.usage = dawn::BufferUsage::CopyDst | dawn::BufferUsage::Uniform;
-        uniformBuffer = device.CreateBuffer(&bufferDesc);
+        dawn::BufferDescriptor descriptor;
+        descriptor.size = sizeof(ShaderData);
+        descriptor.usage = dawn::BufferUsage::CopyDst | dawn::BufferUsage::Uniform;
+        uniformBuffer = device.CreateBuffer(&descriptor);
     }
 
     // Init Texture
@@ -112,20 +113,24 @@ bool ImGui_ImplDawn_Init(dawn::Device& device, dawn::Queue& queue)
         descriptor.vertexStage.module = vsModule;
         descriptor.cFragmentStage.module = fsModule;
         descriptor.cVertexInput.bufferCount = 1;
-        descriptor.cVertexInput.cBuffers[0].stride = 8 * sizeof(float);
+        descriptor.cVertexInput.cBuffers[0].stride = sizeof(ImDrawVert);
         descriptor.cVertexInput.cBuffers[0].attributeCount = 3;
         descriptor.cVertexInput.cAttributes[0].shaderLocation = 0;
-        descriptor.cVertexInput.cAttributes[0].offset = 0;
+        descriptor.cVertexInput.cAttributes[0].offset = offsetof(ImDrawVert, pos);
         descriptor.cVertexInput.cAttributes[0].format = dawn::VertexFormat::Float2;
         descriptor.cVertexInput.cAttributes[1].shaderLocation = 1;
-        descriptor.cVertexInput.cAttributes[1].offset = 2 * sizeof(float);
+        descriptor.cVertexInput.cAttributes[1].offset = offsetof(ImDrawVert, uv);
         descriptor.cVertexInput.cAttributes[1].format = dawn::VertexFormat::Float2;
         descriptor.cVertexInput.cAttributes[2].shaderLocation = 2;
-        descriptor.cVertexInput.cAttributes[2].offset = 4 * sizeof(float);
-        descriptor.cVertexInput.cAttributes[2].format = dawn::VertexFormat::Float4;
+        descriptor.cVertexInput.cAttributes[2].offset = offsetof(ImDrawVert, col);
+        descriptor.cVertexInput.cAttributes[2].format = dawn::VertexFormat::UChar4Norm;
         descriptor.depthStencilState = &descriptor.cDepthStencilState;
         descriptor.cDepthStencilState.format = dawn::TextureFormat::Depth24PlusStencil8;
         descriptor.cColorStates[0].format = GetPreferredSwapChainTextureFormat();
+        descriptor.cColorStates[0].alphaBlend.srcFactor = dawn::BlendFactor::SrcAlpha;
+        descriptor.cColorStates[0].alphaBlend.dstFactor = dawn::BlendFactor::OneMinusSrcAlpha;
+        descriptor.cColorStates[0].colorBlend.srcFactor = dawn::BlendFactor::SrcAlpha;
+        descriptor.cColorStates[0].colorBlend.dstFactor = dawn::BlendFactor::OneMinusSrcAlpha;
 
         pipeline = device.CreateRenderPipeline(&descriptor);
 
@@ -144,22 +149,26 @@ void ImGui_ImplDawn_Shutdown()
     pipeline.Release();
     fontSampler.Release();
     fontTexture.Release();
+    for (dawn::Buffer& indexBuffer : indexBuffers) {
+        indexBuffer.Release();
+    }
+    for (dawn::Buffer& vertexBuffer : vertexBuffers) {
+        vertexBuffer.Release();
+    }
 }
 
 void ImGui_ImplDawn_NewFrame()
 {
 }
 
-dawn::CommandBuffer ImGui_ImplDawn_RenderDrawData(ImDrawData* draw_data, dawn::Device& device, dawn::RenderPassDescriptor& renderPassDescriptor)
+void ImGui_ImplDawn_RenderDrawData(ImDrawData* draw_data, dawn::Device& device, dawn::RenderPassEncoder& pass)
 {
-    dawn::CommandEncoder encoder = device.CreateCommandEncoder();
-
     // Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates != framebuffer coordinates)
     ImGuiIO& io = ImGui::GetIO();
     int fb_width = (int)(draw_data->DisplaySize.x * io.DisplayFramebufferScale.x);
     int fb_height = (int)(draw_data->DisplaySize.y * io.DisplayFramebufferScale.y);
     if (fb_width <= 0 || fb_height <= 0)
-        return encoder.Finish();
+        return;
     draw_data->ScaleClipRects(io.DisplayFramebufferScale);
 
     // Setup viewport, orthographic projection matrix
@@ -185,9 +194,25 @@ dawn::CommandBuffer ImGui_ImplDawn_RenderDrawData(ImDrawData* draw_data, dawn::D
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
 
+        if (n >= indexBuffers.size()) {
+            indexBuffers.resize(n + 1);
+            dawn::BufferDescriptor descriptor;
+            descriptor.size = kMaxVertexCount * sizeof(ImDrawIdx);
+            descriptor.usage = dawn::BufferUsage::CopyDst | dawn::BufferUsage::Index;
+            indexBuffers[n] = device.CreateBuffer(&descriptor);
+        }
+
+        if (n >= vertexBuffers.size()) {
+            vertexBuffers.resize(n + 1);
+            dawn::BufferDescriptor descriptor;
+            descriptor.size = kMaxVertexCount * sizeof(ImDrawVert);
+            descriptor.usage = dawn::BufferUsage::CopyDst | dawn::BufferUsage::Vertex;
+            vertexBuffers[n] = device.CreateBuffer(&descriptor);
+        }
+
         // Upload vertex/index buffers
-        dawn::Buffer vertexBuffer = utils::CreateBufferFromData(device, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), dawn::BufferUsage::Vertex);
-        dawn::Buffer indexBuffer = utils::CreateBufferFromData(device, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), dawn::BufferUsage::Index);
+        vertexBuffers[n].SetSubData(0, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data);
+        indexBuffers[n].SetSubData(0, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data);
 
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
             const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
@@ -204,19 +229,17 @@ dawn::CommandBuffer ImGui_ImplDawn_RenderDrawData(ImDrawData* draw_data, dawn::D
                 clip_rect.w = (pcmd->ClipRect.w - clip_off.y) * clip_scale.y;
 
                 if (clip_rect.x < fb_width && clip_rect.y < fb_height && clip_rect.z >= 0.0f && clip_rect.w >= 0.0f) {
-                    const uint64_t vertexBufferOffsets[] = { pcmd->VtxOffset };
-                    dawn::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPassDescriptor);
-                    pass.SetScissorRect((int)clip_rect.x, (int)(fb_height - clip_rect.w), (int)(clip_rect.z - clip_rect.x), (int)(clip_rect.w - clip_rect.y));
+
+                    const uint64_t vertexBufferOffsets[] = { pcmd->VtxOffset * sizeof(ImDrawVert) };
+
+                    pass.SetScissorRect((int)clip_rect.x, (int)(clip_rect.y), (int)(clip_rect.z - clip_rect.x), (int)(clip_rect.w - clip_rect.y));
                     pass.SetPipeline(pipeline);
                     pass.SetBindGroup(0, bindGroup, 0, nullptr);
-                    pass.SetVertexBuffers(0, 1, &vertexBuffer, vertexBufferOffsets);
-                    pass.SetIndexBuffer(indexBuffer, pcmd->IdxOffset);
-                    pass.DrawIndexed(pcmd->ElemCount, 1, pcmd->IdxOffset, pcmd->VtxOffset, 0);
-                    pass.EndPass();
+                    pass.SetVertexBuffers(0, 1, &vertexBuffers[n], vertexBufferOffsets);
+                    pass.SetIndexBuffer(indexBuffers[n], pcmd->IdxOffset * sizeof(ImDrawIdx));
+                    pass.DrawIndexed(pcmd->ElemCount, 1, 0, 0, 0);
                 }
             }
         }
     }
-
-    return encoder.Finish();
 }

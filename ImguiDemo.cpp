@@ -32,11 +32,11 @@ bool show_another_window = false;
 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
 void init() {
-    device = CreateCppDawnDevice();
+    device = CreateCppDawnDevice(1280, 720);
     queue = device.CreateQueue();
     swapchain = GetSwapChain(device);
     swapchain.Configure(GetPreferredSwapChainTextureFormat(), dawn::TextureUsage::OutputAttachment,
-        640, 480);
+        1280, 720);
 
     depthStencilView = CreateDefaultDepthStencilView(device);
 
@@ -44,9 +44,8 @@ void init() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    (void)io;
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -106,10 +105,16 @@ void frame()
     dawn::Texture backbuffer = swapchain.GetNextTexture();
     dawn::TextureView backbufferView = backbuffer.CreateView();
 
-    utils::ComboRenderPassDescriptor renderPass({ backbufferView }, depthStencilView);
+    dawn::CommandEncoder encoder = device.CreateCommandEncoder();
 
-    dawn::CommandBuffer commandBuffers[] = { ImGui_ImplDawn_RenderDrawData(ImGui::GetDrawData(), device, renderPass) };
-    queue.Submit(1, commandBuffers);
+    utils::ComboRenderPassDescriptor renderPassDescriptor({ backbufferView }, depthStencilView);
+    dawn::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPassDescriptor);
+
+    ImGui_ImplDawn_RenderDrawData(ImGui::GetDrawData(), device, pass);
+
+    pass.EndPass();
+    dawn::CommandBuffer commands[] = { encoder.Finish() };
+    queue.Submit(1, commands);
     swapchain.Present(backbuffer);
     DoFlush();
 }

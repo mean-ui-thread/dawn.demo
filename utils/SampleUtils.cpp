@@ -87,7 +87,7 @@ static dawn_native::BackendType backendType = dawn_native::BackendType::OpenGL;
     static utils::TerribleCommandBuffer* c2sBuf = nullptr;
     static utils::TerribleCommandBuffer* s2cBuf = nullptr;
 
-    dawn::Device CreateCppDawnDevice()
+    dawn::Device CreateCppDawnDevice(int width, int height)
     {
         glfwSetErrorCallback(PrintGLFWError);
         if (!glfwInit()) {
@@ -96,7 +96,7 @@ static dawn_native::BackendType backendType = dawn_native::BackendType::OpenGL;
 
         // Create the test window and discover adapters using it (esp. for OpenGL)
         utils::SetupGLFWWindowHintsForBackend(backendType);
-        window = glfwCreateWindow(640, 480, "Dawn window", nullptr, nullptr);
+        window = glfwCreateWindow(width, height, "Dawn window", nullptr, nullptr);
         if (!window) {
             return dawn::Device();
         }
@@ -182,10 +182,14 @@ dawn::SwapChain GetSwapChain(const dawn::Device &device) {
 }
 
 dawn::TextureView CreateDefaultDepthStencilView(const dawn::Device& device) {
+
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+
     dawn::TextureDescriptor descriptor;
     descriptor.dimension = dawn::TextureDimension::e2D;
-    descriptor.size.width = 640;
-    descriptor.size.height = 480;
+    descriptor.size.width = width;
+    descriptor.size.height = height;
     descriptor.size.depth = 1;
     descriptor.arrayLayerCount = 1;
     descriptor.sampleCount = 1;

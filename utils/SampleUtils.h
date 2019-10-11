@@ -22,7 +22,7 @@ bool ShouldQuit();
 struct GLFWwindow;
 struct GLFWwindow* GetGLFWWindow();
 
-dawn::Device CreateCppDawnDevice();
+dawn::Device CreateCppDawnDevice(int width = 640, int height = 480);
 uint64_t GetSwapChainImplementation();
 dawn::TextureFormat GetPreferredSwapChainTextureFormat();
 dawn::SwapChain GetSwapChain(const dawn::Device& device);
