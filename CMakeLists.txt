@@ -30,6 +30,8 @@ HunterGate(
 
 project(dawn.demo)
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 ## https://docs.hunter.sh/en/latest/packages/pkg/glm.html
 hunter_add_package(glm)
 find_package(glm CONFIG REQUIRED)
@@ -38,22 +40,43 @@ hunter_add_package(dawn)
 find_package(dawn CONFIG REQUIRED)
 
 add_library(SampleUtils OBJECT
-    SampleUtils.cpp
-    SampleUtils.h
+    utils/SampleUtils.cpp
+    utils/SampleUtils.h
 )
+
 target_link_libraries(SampleUtils PUBLIC
     dawn::dawn_bindings
     dawn::dawn_utils
     dawn::dawn
 )
 
+add_library(imgui STATIC
+    imgui/imgui.cpp
+    imgui/imgui_demo.cpp
+    imgui/imgui_draw.cpp
+    imgui/imgui_widgets.cpp
+
+    # Dawn Backend Implementation file
+    imgui/imgui_impl_dawn.cpp
+    imgui/imgui_impl_dawn.h
+    imgui/imgui_impl_glfw.cpp
+    imgui/imgui_impl_glfw.h
+)
+
+target_link_libraries(imgui PUBLIC SampleUtils)
+
 macro(dawn_sample target_name)
     add_executable(${target_name} ${target_name}.cpp)
-    target_link_libraries(${target_name} PRIVATE SampleUtils glm)
+    target_link_libraries(${target_name} PRIVATE SampleUtils)
 endmacro()
 
-dawn_sample(CppHelloTriangle)
+dawn_sample(Animometer)
 dawn_sample(CHelloTriangle)
 dawn_sample(ComputeBoids)
-dawn_sample(Animometer)
+dawn_sample(CppHelloTriangle)
 dawn_sample(CubeReflection)
+dawn_sample(ImguiDemo)
+
+target_link_libraries(ComputeBoids PRIVATE glm)
+target_link_libraries(CubeReflection PRIVATE glm)
+target_link_libraries(ImguiDemo PRIVATE imgui)
