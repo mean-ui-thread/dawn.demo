@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "SampleUtils.h"
+#include "utils/SampleUtils.h"
 
 #include "utils/DawnHelpers.h"
 #include "utils/SystemUtils.h"
@@ -65,7 +65,7 @@ void init() {
         descriptor.vertexStage.module = vsModule;
         descriptor.vertexStage.entryPoint = "main";
 
-        DawnPipelineStageDescriptor fragmentStage;
+        DawnProgrammableStageDescriptor fragmentStage;
         fragmentStage.nextInChain = nullptr;
         fragmentStage.module = fsModule;
         fragmentStage.entryPoint = "main";

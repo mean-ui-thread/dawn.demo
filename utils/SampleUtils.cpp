@@ -68,66 +68,67 @@ enum class CmdBufType {
     static dawn_native::BackendType backendType = dawn_native::BackendType::D3D12;
 #elif defined(DAWN_ENABLE_BACKEND_METAL)
     static dawn_native::BackendType backendType = dawn_native::BackendType::Metal;
-#elif defined(DAWN_ENABLE_BACKEND_OPENGL)
-    static dawn_native::BackendType backendType = dawn_native::BackendType::OpenGL;
 #elif defined(DAWN_ENABLE_BACKEND_VULKAN)
     static dawn_native::BackendType backendType = dawn_native::BackendType::Vulkan;
+#elif defined(DAWN_ENABLE_BACKEND_OPENGL)
+static dawn_native::BackendType backendType = dawn_native::BackendType::OpenGL;
 #else
-    #error
+#error
 #endif
 
-static CmdBufType cmdBufType = CmdBufType::Terrible;
-static std::unique_ptr<dawn_native::Instance> instance;
-static utils::BackendBinding* binding = nullptr;
+    static CmdBufType cmdBufType = CmdBufType::None;
+    static std::unique_ptr<dawn_native::Instance> instance;
+    static utils::BackendBinding* binding = nullptr;
 
-static GLFWwindow* window = nullptr;
+    static GLFWwindow* window = nullptr;
 
-static dawn_wire::WireServer* wireServer = nullptr;
-static dawn_wire::WireClient* wireClient = nullptr;
-static utils::TerribleCommandBuffer* c2sBuf = nullptr;
-static utils::TerribleCommandBuffer* s2cBuf = nullptr;
+    static dawn_wire::WireServer* wireServer = nullptr;
+    static dawn_wire::WireClient* wireClient = nullptr;
+    static utils::TerribleCommandBuffer* c2sBuf = nullptr;
+    static utils::TerribleCommandBuffer* s2cBuf = nullptr;
 
-dawn::Device CreateCppDawnDevice() {
-    glfwSetErrorCallback(PrintGLFWError);
-    if (!glfwInit()) {
-        return dawn::Device();
-    }
-
-    // Create the test window and discover adapters using it (esp. for OpenGL)
-    utils::SetupGLFWWindowHintsForBackend(backendType);
-    window = glfwCreateWindow(640, 480, "Dawn window", nullptr, nullptr);
-    if (!window) {
-        return dawn::Device();
-    }
-
-    instance = std::make_unique<dawn_native::Instance>();
-    utils::DiscoverAdapter(instance.get(), window, backendType);
-
-    // Get an adapter for the backend to use, and create the device.
-    dawn_native::Adapter backendAdapter;
+    dawn::Device CreateCppDawnDevice(int width, int height)
     {
-        std::vector<dawn_native::Adapter> adapters = instance->GetAdapters();
-        auto adapterIt = std::find_if(adapters.begin(), adapters.end(),
-                                      [](const dawn_native::Adapter adapter) -> bool {
-            return adapter.GetBackendType() == backendType;
-        });
-        ASSERT(adapterIt != adapters.end());
-        backendAdapter = *adapterIt;
-    }
+        glfwSetErrorCallback(PrintGLFWError);
+        if (!glfwInit()) {
+            return dawn::Device();
+        }
 
-    DawnDevice backendDevice = backendAdapter.CreateDevice();
-    DawnProcTable backendProcs = dawn_native::GetProcs();
+        // Create the test window and discover adapters using it (esp. for OpenGL)
+        utils::SetupGLFWWindowHintsForBackend(backendType);
+        window = glfwCreateWindow(width, height, "Dawn window", nullptr, nullptr);
+        if (!window) {
+            return dawn::Device();
+        }
 
-    binding = utils::CreateBinding(backendType, window, backendDevice);
-    if (binding == nullptr) {
-        return dawn::Device();
-    }
+        instance = std::make_unique<dawn_native::Instance>();
+        utils::DiscoverAdapter(instance.get(), window, backendType);
 
-    // Choose whether to use the backend procs and devices directly, or set up the wire.
-    DawnDevice cDevice = nullptr;
-    DawnProcTable procs;
+        // Get an adapter for the backend to use, and create the device.
+        dawn_native::Adapter backendAdapter;
+        {
+            std::vector<dawn_native::Adapter> adapters = instance->GetAdapters();
+            auto adapterIt = std::find_if(adapters.begin(), adapters.end(),
+                [](const dawn_native::Adapter adapter) -> bool {
+                    return adapter.GetBackendType() == backendType;
+                });
+            ASSERT(adapterIt != adapters.end());
+            backendAdapter = *adapterIt;
+        }
 
-    switch (cmdBufType) {
+        DawnDevice backendDevice = backendAdapter.CreateDevice();
+        DawnProcTable backendProcs = dawn_native::GetProcs();
+
+        binding = utils::CreateBinding(backendType, window, backendDevice);
+        if (binding == nullptr) {
+            return dawn::Device();
+        }
+
+        // Choose whether to use the backend procs and devices directly, or set up the wire.
+        DawnDevice cDevice = nullptr;
+        DawnProcTable procs;
+
+        switch (cmdBufType) {
         case CmdBufType::None:
             procs = backendProcs;
             cDevice = backendDevice;
@@ -181,10 +182,14 @@ dawn::SwapChain GetSwapChain(const dawn::Device &device) {
 }
 
 dawn::TextureView CreateDefaultDepthStencilView(const dawn::Device& device) {
+
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+
     dawn::TextureDescriptor descriptor;
     descriptor.dimension = dawn::TextureDimension::e2D;
-    descriptor.size.width = 640;
-    descriptor.size.height = 480;
+    descriptor.size.width = width;
+    descriptor.size.height = height;
     descriptor.size.depth = 1;
     descriptor.arrayLayerCount = 1;
     descriptor.sampleCount = 1;
